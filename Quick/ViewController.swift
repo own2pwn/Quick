@@ -14,36 +14,38 @@ enum QuickViewType {
     case plain
 }
 
-struct QuickView {
+protocol QuickViewSpec {
+    var name: String { get }
+    var quickType: QuickViewType { get }
+
+    var backgroundColor: UIColor? { get }
+}
+
+struct QuickViewSpecImp: QuickViewSpec {
     let name: String
-    let type: QuickViewType
+    let quickType: QuickViewType
 
     let backgroundColor: UIColor?
 }
 
-final class Bootstrapper {
-    // MARK: - Interface
+open class QuickView: UIView {
+    // MARK: - Members
 
-    func bootstrap<T:UIView>(nativeType: T.Type, config: QuickView) {
+    open var identifier: String
 
+    // public let spec: QuickViewSpec
+
+    // MARK: - Init
+
+    init(spec: QuickViewSpec) {
+        identifier = spec.name
+        super.init(frame: .zero)
+
+        backgroundColor = spec.backgroundColor
     }
-}
 
-final class Producer {
-    // MARK: - Interface
-
-    func makeView(config: QuickView) {
-        let viewType: UIView.Type = desiredType(for: config.type)
-    }
-
-    // MARK: - Helpers
-
-    private func desiredType<T: UIView>(for quickType: QuickViewType) -> T.Type {
-        switch quickType {
-        case .plain:
-            return UIView.self as! T.Type
-        }
-    }
+    @available(*, unavailable)
+    public required init?(coder _: NSCoder) { fatalError() }
 }
 
 class ViewController: UIViewController {
@@ -56,7 +58,7 @@ class ViewController: UIViewController {
     private func testJSON() {
         let str: String = "{\"name\":\"card\",\"backgroundColor\":\"#343F4B\",\"type\":0,\"layout\":[{\"method\":3,\"arguments\":[\"16\"]},{\"method\":2,\"arguments\":[\"128\"]},{\"method\":6,\"arguments\":[\"8\"]}]}"
         if let d = str.data(using: .utf8) {
-            let qv = QuickView(data: d)
+            let qv = QuickViewSpecImp(data: d)
         }
     }
 }
@@ -78,7 +80,7 @@ extension QuickViewType {
 
 // ======
 
-extension QuickView {
+extension QuickViewSpecImp {
     init?(data: Data) {
         guard
             let object = try? JSONSerialization.jsonObject(
@@ -93,7 +95,7 @@ extension QuickView {
         else { return nil }
 
         self.name = name
-        type = quickType
+        self.quickType = quickType
         let colorValue: String? = json["backgroundColor"] as? String
 
         backgroundColor = UIColor.hex(colorValue)
