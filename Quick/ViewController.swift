@@ -15,17 +15,25 @@ enum QuickViewType {
 }
 
 protocol QuickViewSpec {
-    var name: String { get }
-    var quickType: QuickViewType { get }
-
     var backgroundColor: UIColor? { get }
 }
 
 struct QuickViewSpecImp: QuickViewSpec {
+    let backgroundColor: UIColor?
+}
+
+protocol QuickSpec {
+    var name: String { get }
+    var quickType: QuickViewType { get }
+
+    var viewSpec: QuickViewSpec { get }
+}
+
+struct QuickSpecImp: QuickSpec {
     let name: String
     let quickType: QuickViewType
 
-    let backgroundColor: UIColor?
+    let viewSpec: QuickViewSpec
 }
 
 open class QuickView: UIView {
@@ -37,15 +45,85 @@ open class QuickView: UIView {
 
     // MARK: - Init
 
-    init(spec: QuickViewSpec) {
+    init(spec: QuickSpec) {
         identifier = spec.name
         super.init(frame: .zero)
 
-        backgroundColor = spec.backgroundColor
+        backgroundColor = spec.viewSpec.backgroundColor
     }
 
     @available(*, unavailable)
     public required init?(coder _: NSCoder) { fatalError() }
+}
+
+final class Bootstrapper {
+
+// MARK: - Members
+
+    private typealias Setup = (UIView, QuickSpec) -> Void
+
+    // MARK: - Interface
+
+    func bootstrap(_ view: UIView, spec: QuickSpec) {
+        guard let setup = quickTypeToSetup[spec.quickType] else {
+            return
+        }
+        setup(view, spec)
+    }
+
+    // MARK: - Helpers
+
+    private func bootstrapPlain(_ view: UIView, spec: QuickSpec) {
+        
+    }
+
+    // MARK: - Strategy
+
+    private lazy var quickTypeToSetup: [QuickViewType: Setup] = {
+        let strategy = [
+            QuickViewType.plain: bootstrapPlain,
+        ]
+
+        return strategy
+    }()
+}
+
+final class Producer {
+    // MARK: - Members
+
+    private typealias Builder = (QuickSpec) -> UIView
+
+    private lazy var bootstrap:
+        Bootstrapper = Bootstrapper()
+
+    // MARK: - Interface
+
+    func makeView(spec: QuickSpec) -> UIView {
+        guard let maker = quickTypeToBuilder[spec.quickType] else {
+            assertionFailure()
+            return UIView()
+        }
+
+        return maker(spec)
+    }
+
+    // MARK: - Helpers
+
+    private func makePlainView(spec: QuickSpec) -> UIView {
+        let plain = UIView()
+        bootstrap.bootstrap(plain, spec: spec)
+
+
+        return plain
+    }
+
+    private lazy var quickTypeToBuilder: [QuickViewType: Builder] = {
+        let factory = [
+            QuickViewType.plain: makePlainView,
+        ]
+
+        return factory
+    }()
 }
 
 class ViewController: UIViewController {
@@ -58,7 +136,7 @@ class ViewController: UIViewController {
     private func testJSON() {
         let str: String = "{\"name\":\"card\",\"backgroundColor\":\"#343F4B\",\"type\":0,\"layout\":[{\"method\":3,\"arguments\":[\"16\"]},{\"method\":2,\"arguments\":[\"128\"]},{\"method\":6,\"arguments\":[\"8\"]}]}"
         if let d = str.data(using: .utf8) {
-            let qv = QuickViewSpecImp(data: d)
+            let qv = QuickSpecImp(data: d)
         }
     }
 }
@@ -80,7 +158,7 @@ extension QuickViewType {
 
 // ======
 
-extension QuickViewSpecImp {
+extension QuickSpecImp {
     init?(data: Data) {
         guard
             let object = try? JSONSerialization.jsonObject(
@@ -98,6 +176,9 @@ extension QuickViewSpecImp {
         self.quickType = quickType
         let colorValue: String? = json["backgroundColor"] as? String
 
-        backgroundColor = UIColor.hex(colorValue)
+        let viewSpec = QuickViewSpecImp(
+            backgroundColor: UIColor.hex(colorValue)
+        )
+        self.viewSpec = viewSpec
     }
 }
