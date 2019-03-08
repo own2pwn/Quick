@@ -10,11 +10,11 @@ import UIKit
 
 typealias JSON = [String: Any]
 
-enum QuickViewType {
+public enum QuickViewType {
     case plain
 }
 
-protocol QuickViewSpec {
+public protocol QuickViewSpec {
     var backgroundColor: UIColor? { get }
 }
 
@@ -22,7 +22,7 @@ struct QuickViewSpecImp: QuickViewSpec {
     let backgroundColor: UIColor?
 }
 
-protocol QuickSpec {
+public protocol QuickSpec {
     var name: String { get }
     var quickType: QuickViewType { get }
 
@@ -41,12 +41,13 @@ open class QuickView: UIView {
 
     open var identifier: String
 
-    // public let spec: QuickViewSpec
+    public let spec: QuickSpec
 
     // MARK: - Init
 
-    init(spec: QuickSpec) {
+    public init(spec: QuickSpec) {
         identifier = spec.name
+        self.spec = spec
         super.init(frame: .zero)
 
         backgroundColor = spec.viewSpec.backgroundColor
@@ -54,6 +55,12 @@ open class QuickView: UIView {
 
     @available(*, unavailable)
     public required init?(coder _: NSCoder) { fatalError() }
+
+    // MARK: - Layout
+
+    open override func layoutSubviews() {
+        
+    }
 }
 
 final class Bootstrapper {
@@ -74,7 +81,7 @@ final class Bootstrapper {
     // MARK: - Helpers
 
     private func bootstrapPlain(_ view: UIView, spec: QuickSpec) {
-        
+
     }
 
     // MARK: - Strategy
@@ -110,9 +117,7 @@ final class Producer {
     // MARK: - Helpers
 
     private func makePlainView(spec: QuickSpec) -> UIView {
-        let plain = UIView()
-        bootstrap.bootstrap(plain, spec: spec)
-
+        let plain = QuickView(spec: spec)
 
         return plain
     }
