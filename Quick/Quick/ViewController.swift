@@ -200,7 +200,7 @@ open class QuickView: UIView {
 
     open override func layoutSubviews() {
         super.layoutSubviews()
-        
+
         Pinner.layout(self, specs: spec.layoutSpecs)
     }
 }
