@@ -11,6 +11,8 @@ import UIKit
 
 typealias JSON = [String: Any]
 
+let LayoutContainerSafeArea: String = "container.safeArea"
+
 let LayoutMethodSize: Int = 0
 let LayoutMethodWidth: Int = 1
 let LayoutMethodHeight: Int = 2
@@ -23,45 +25,85 @@ let LayoutMethodEnd: Int = 6
 let LayoutMethodStart: Int = 7
 let LayoutMethodHorizontally: Int = 8
 
+let LayoutMethodMarginTop: Int = 9
+
+public enum QuickLayoutMethodArgument {
+    case constant(CGFloat)
+    case containerSafeArea
+}
+
+public extension QuickLayoutMethodArgument {
+    var argValue: CGFloat? {
+        switch self {
+        case let .constant(value):
+            return value
+
+        case .containerSafeArea:
+            return nil
+        }
+    }
+}
+
+// public enum QuickLayoutMethod {
+//    case size(CGFloat)
+//    case width(CGFloat)
+//    case height(CGFloat)
+//
+//    case top(CGFloat)
+//    case bottom(CGFloat)
+//    case vertically(CGFloat)
+//
+//    case end(CGFloat)
+//    case start(CGFloat)
+//    case horizontally(CGFloat)
+//
+//    case marginTop(CGFloat)
+// }
+
 public enum QuickLayoutMethod {
-    case size(CGFloat)
-    case width(CGFloat)
-    case height(CGFloat)
+    case size
+    case width
+    case height
 
-    case top(CGFloat)
-    case bottom(CGFloat)
-    case vertically(CGFloat)
+    case top
+    case bottom
+    case vertically
 
-    case end(CGFloat)
-    case start(CGFloat)
-    case horizontally(CGFloat)
+    case end
+    case start
+    case horizontally
+
+    case marginTop
 }
 
 extension QuickLayoutMethod: Hashable {}
 
 extension QuickLayoutMethod {
-    init?(rawValue: Int, arg: CGFloat) {
+    init?(rawValue: Int) {
         switch rawValue {
         case LayoutMethodSize:
-            self = .size(arg)
+            self = .size
         case LayoutMethodWidth:
-            self = .width(arg)
+            self = .width
         case LayoutMethodHeight:
-            self = .height(arg)
+            self = .height
 
         case LayoutMethodTop:
-            self = .top(arg)
+            self = .top
         case LayoutMethodBottom:
-            self = .bottom(arg)
+            self = .bottom
         case LayoutMethodVertically:
-            self = .vertically(arg)
+            self = .vertically
 
         case LayoutMethodEnd:
-            self = .end(arg)
+            self = .end
         case LayoutMethodStart:
-            self = .start(arg)
+            self = .start
         case LayoutMethodHorizontally:
-            self = .horizontally(arg)
+            self = .horizontally
+
+        case LayoutMethodMarginTop:
+            self = .marginTop
 
         default:
             return nil
@@ -69,12 +111,47 @@ extension QuickLayoutMethod {
     }
 }
 
+// extension QuickLayoutMethod {
+//    init?(rawValue: Int, arg: CGFloat) {
+//        switch rawValue {
+//        case LayoutMethodSize:
+//            self = .size(arg)
+//        case LayoutMethodWidth:
+//            self = .width(arg)
+//        case LayoutMethodHeight:
+//            self = .height(arg)
+//
+//        case LayoutMethodTop:
+//            self = .top(arg)
+//        case LayoutMethodBottom:
+//            self = .bottom(arg)
+//        case LayoutMethodVertically:
+//            self = .vertically(arg)
+//
+//        case LayoutMethodEnd:
+//            self = .end(arg)
+//        case LayoutMethodStart:
+//            self = .start(arg)
+//        case LayoutMethodHorizontally:
+//            self = .horizontally(arg)
+//
+//        case LayoutMethodMarginTop:
+//            self = .marginTop(arg)
+//
+//        default:
+//            return nil
+//        }
+//    }
+// }
+
 public protocol QuickLayoutSpec {
     var method: QuickLayoutMethod { get }
+    var argument: QuickLayoutMethodArgument { get }
 }
 
 struct QuickLayoutSpecImp: QuickLayoutSpec {
     let method: QuickLayoutMethod
+    let argument: QuickLayoutMethodArgument
 }
 
 public enum QuickViewType {
@@ -83,24 +160,41 @@ public enum QuickViewType {
 
 public protocol QuickViewSpec {
     var backgroundColor: UIColor? { get }
+
+    var cornerRadius: CGFloat? { get }
 }
 
 struct QuickViewSpecImp: QuickViewSpec {
     let backgroundColor: UIColor?
+
+    let cornerRadius: CGFloat?
 }
 
 public protocol QuickSpec {
     var name: String { get }
     var quickType: QuickViewType { get }
 
+    var subviews: [QuickSpec] { get }
     var viewSpec: QuickViewSpec { get }
     var layoutSpecs: [QuickLayoutSpec] { get }
+}
+
+public protocol QuickControllerSpec {
+    var name: String { get }
+
+    var container: QuickSpec { get }
+}
+
+struct QuickControllerSpecImp: QuickControllerSpec {
+    let name: String
+    let container: QuickSpec
 }
 
 struct QuickSpecImp: QuickSpec {
     let name: String
     let quickType: QuickViewType
 
+    let subviews: [QuickSpec]
     let viewSpec: QuickViewSpec
     let layoutSpecs: [QuickLayoutSpec]
 }
@@ -114,39 +208,51 @@ final class Pinner {
 
     // MARK: - Interface
 
-    static func layout(_ view: UIView, specs: [QuickLayoutSpec]) {
+    static func layout(_ view: UIView, specs: [QuickLayoutSpec], in container: UIView) {
         let viewPin = view.pin
 
         for spec in specs {
-            apply(spec: spec, to: viewPin)
+            apply(spec: spec, to: viewPin, in: container)
             // let pinAction = action(pin: viewPin, for: spec)
         }
     }
 
     // MARK: - Helpers
 
-    private static func apply(spec: QuickLayoutSpec, to pin: Pin) {
+    private static func apply(spec: QuickLayoutSpec, to pin: Pin, in container: UIView) {
+        let const: CGFloat = spec.argument.argValue ?? 0
+        var insets: PEdgeInsets = PEdgeInsets(
+            top: const, left: const,
+            bottom: const, right: const
+        )
+        if case .containerSafeArea = spec.argument {
+            insets = container.pin.safeArea
+        }
+
         switch spec.method {
-        case let .size(s):
-            pin.size(s)
-        case let .width(w):
-            pin.width(w)
-        case let .height(h):
-            pin.height(h)
+        case .size:
+            pin.size(const)
+        case .width:
+            pin.width(const)
+        case .height:
+            pin.height(const)
 
-        case let .top(m):
-            pin.top(m)
-        case let .bottom(m):
-            pin.bottom(m)
-        case let .vertically(m):
-            pin.vertically(m)
+        case .top:
+            pin.top(insets)
+        case .bottom:
+            pin.bottom(insets)
+        case .vertically:
+            pin.vertically(insets)
 
-        case let .end(m):
-            pin.end(m)
-        case let .start(m):
-            pin.start(m)
-        case let .horizontally(m):
-            pin.horizontally(m)
+        case .end:
+            pin.end(insets)
+        case .start:
+            pin.start(insets)
+        case .horizontally:
+            pin.horizontally(insets)
+
+        case .marginTop:
+            pin.marginTop(const)
         }
     }
 
@@ -172,6 +278,9 @@ final class Pinner {
             return pin.start
         case .horizontally:
             return pin.horizontally
+
+        case .marginTop:
+            return pin.marginTop
         }
     }
 }
@@ -190,7 +299,14 @@ open class QuickView: UIView {
         self.spec = spec
         super.init(frame: .zero)
 
-        backgroundColor = spec.viewSpec.backgroundColor
+        setupView(spec: spec.viewSpec)
+    }
+
+    private func setupView(spec: QuickViewSpec) {
+        backgroundColor = spec.backgroundColor
+        if let corner = spec.cornerRadius {
+            layer.cornerRadius = corner
+        }
     }
 
     @available(*, unavailable)
@@ -198,11 +314,15 @@ open class QuickView: UIView {
 
     // MARK: - Layout
 
-    open override func layoutSubviews() {
-        super.layoutSubviews()
-
-        Pinner.layout(self, specs: spec.layoutSpecs)
+    func quickLayout(container: UIView) {
+        Pinner.layout(self, specs: spec.layoutSpecs, in: container)
     }
+
+//    open override func layoutSubviews() {
+//        super.layoutSubviews()
+//
+//        Pinner.layout(self, specs: spec.layoutSpecs, in: self)
+//    }
 }
 
 final class Bootstrapper {
@@ -234,20 +354,49 @@ final class Bootstrapper {
     }()
 }
 
+open class QuickController: UIViewController {
+    // MARK: - Interface
+
+    open func setup(with spec: QuickControllerSpec) {
+        view.subviews.forEach { $0.removeFromSuperview() }
+        let newViews = makeViews(specs: spec.container.subviews)
+        newViews.forEach(view.addSubview)
+
+        view.setNeedsLayout()
+    }
+
+    // MARK: - Helpers
+
+    private func makeViews(specs: [QuickSpec]) -> [QuickView] {
+        let producer = Producer()
+
+        return specs.map(producer.makeView)
+    }
+
+    // MARK: - Layout
+
+    open override func viewDidLayoutSubviews() {
+        let quickViews: [QuickView] = view.subviews
+            .compactMap { $0 as? QuickView }
+
+        quickViews.forEach { $0.quickLayout(container: view) }
+    }
+}
+
 final class Producer {
     // MARK: - Members
 
-    private typealias Builder = (QuickSpec) -> UIView
+    private typealias Builder = (QuickSpec) -> QuickView
 
     private lazy var bootstrap:
         Bootstrapper = Bootstrapper()
 
     // MARK: - Interface
 
-    func makeView(spec: QuickSpec) -> UIView {
+    func makeView(spec: QuickSpec) -> QuickView {
         guard let maker = quickTypeToBuilder[spec.quickType] else {
             assertionFailure()
-            return UIView()
+            return QuickView(spec: spec)
         }
 
         return maker(spec)
@@ -255,7 +404,7 @@ final class Producer {
 
     // MARK: - Helpers
 
-    private func makePlainView(spec: QuickSpec) -> UIView {
+    private func makePlainView(spec: QuickSpec) -> QuickView {
         let plain = QuickView(spec: spec)
 
         return plain
@@ -270,7 +419,7 @@ final class Producer {
     }()
 }
 
-class ViewController: UIViewController {
+class ViewController: QuickController {
     override func viewDidLoad() {
         super.viewDidLoad()
 
@@ -278,10 +427,9 @@ class ViewController: UIViewController {
     }
 
     private func testJSON() {
-        let str: String = "{\"name\":\"card\",\"backgroundColor\":\"#343F4B\",\"type\":0,\"layout\":[{\"method\":3,\"arguments\":[\"16\"]},{\"method\":2,\"arguments\":[\"128\"]},{\"method\":8,\"arguments\":[\"8\"]}]}"
-        if let d = str.data(using: .utf8), let qv = QuickSpecImp(data: d) {
-            let v = Producer().makeView(spec: qv)
-            view.addSubview(v)
+        let str: String = "{\"name\":\"CardController\",\"type\":0,\"container\":{\"name\":\"container\",\"type\":0,\"subviews\":[{\"name\":\"card\",\"corner\":\"8\",\"backgroundColor\":\"#343F4B\",\"type\":0,\"layout\":[{\"method\":3,\"arguments\":[\"container.safeArea\"]},{\"method\":9,\"arguments\":[\"16\"]},{\"method\":2,\"arguments\":[\"128\"]},{\"method\":8,\"arguments\":[\"8\"]}]}]}}"
+        if let d = str.data(using: .utf8), let qc = QuickControllerSpecImp(data: d) {
+            setup(with: qc)
         }
     }
 }
@@ -303,7 +451,41 @@ extension QuickViewType {
 
 // ======
 
+extension QuickControllerSpecImp {
+    init?(data: Data) {
+        guard
+            let object = try? JSONSerialization.jsonObject(
+                with: data, options: []
+            ), let json = object as? JSON
+        else { return nil }
+
+        guard
+            let name = json["name"] as? String,
+            let containerData = json["container"] as? JSON,
+            let container = QuickSpecImp(json: containerData)
+        else { return nil }
+
+        self.name = name
+        self.container = container
+    }
+}
+
 extension QuickSpecImp {
+    init?(json: JSON) {
+        guard
+            let name = json["name"] as? String,
+            let viewType = json["type"] as? Int,
+            let quickType = QuickViewType(rawValue: viewType)
+        else { return nil }
+
+        self.name = name
+        self.quickType = quickType
+
+        subviews = QuickSpecImp.parseSubviews(json: json)
+        viewSpec = QuickSpecImp.parseViewSpecs(json: json)
+        layoutSpecs = QuickSpecImp.parseLayout(json: json)
+    }
+
     init?(data: Data) {
         guard
             let object = try? JSONSerialization.jsonObject(
@@ -319,13 +501,36 @@ extension QuickSpecImp {
 
         self.name = name
         self.quickType = quickType
-        let colorValue: String? = json["backgroundColor"] as? String
 
-        let viewSpec = QuickViewSpecImp(
-            backgroundColor: UIColor.hex(colorValue)
-        )
-        self.viewSpec = viewSpec
+        subviews = QuickSpecImp.parseSubviews(json: json)
+        viewSpec = QuickSpecImp.parseViewSpecs(json: json)
         layoutSpecs = QuickSpecImp.parseLayout(json: json)
+    }
+
+    // MARK: - Helpers
+
+    private static func parseSubviews(json: JSON) -> [QuickSpec] {
+        guard let subviews = json["subviews"] as? [JSON] else {
+            return []
+        }
+        return subviews.compactMap(QuickSpecImp.init(json:))
+    }
+
+    // MARK: - Helpers
+
+    private static func parseViewSpecs(json: JSON) -> QuickViewSpec {
+        let colorValue: String? = json["backgroundColor"] as? String
+        var cornerRadius: CGFloat?
+
+        if let radiusProperty = json["corner"] as? String,
+            let radiusValue = Double(radiusProperty) {
+            cornerRadius = CGFloat(radiusValue)
+        }
+
+        return QuickViewSpecImp(
+            backgroundColor: UIColor.hex(colorValue),
+            cornerRadius: cornerRadius
+        )
     }
 
     // MARK: - Helpers
@@ -337,10 +542,12 @@ extension QuickSpecImp {
         var result: [QuickLayoutSpec] = []
 
         for spec in layout {
-            let arg = getArgumentValue(spec: spec)
             if let methodValue = spec["method"] as? Int,
-                let method = QuickLayoutMethod(rawValue: methodValue, arg: arg) {
-                let newSpec = QuickLayoutSpecImp(method: method)
+                let method = QuickLayoutMethod(rawValue: methodValue) {
+                let newSpec = QuickLayoutSpecImp(
+                    method: method,
+                    argument: getArgumentValue(spec: spec)
+                )
                 result.append(newSpec)
             }
         }
@@ -348,20 +555,26 @@ extension QuickSpecImp {
         return result
     }
 
-    private static func getArgumentValue(spec: JSON) -> CGFloat {
+    private static func getArgumentValue(spec: JSON) -> QuickLayoutMethodArgument {
+        let nothing: QuickLayoutMethodArgument = .constant(0)
+
         guard let values = spec["arguments"] as? [Any], !values.isEmpty else {
-            return 0
+            return nothing
         }
         guard let argValue = values[0] as? String else {
-            return 0
+            return nothing
         }
         if let floatValue = Double(argValue) {
-            return CGFloat(floatValue)
+            return .constant(CGFloat(floatValue))
         }
         if let intValue = Int(argValue) {
-            return CGFloat(intValue)
+            return .constant(CGFloat(intValue))
         }
 
-        return 0
+        if argValue == LayoutContainerSafeArea {
+            return .containerSafeArea
+        }
+
+        return nothing
     }
 }
