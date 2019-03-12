@@ -34,9 +34,13 @@ let LayoutMethodSizeToFit: Int = 12
 let LayoutMethodSizeToFitWidth: Int = 13
 let LayoutMethodSizeToFitHeight: Int = 14
 
+let LayoutMethodVertCenter: Int = 15
+
 public enum QuickLayoutMethodArgument {
     case constant(CGFloat)
     case containerSafeArea
+
+    case vCenter(String, CGFloat)
 
     case verticalAlign(String, CGFloat, VerticalAlign)
 }
@@ -90,6 +94,8 @@ public enum QuickLayoutMethod {
     case sizeToFit
     case sizeToFitWidth
     case sizeToFitHeight
+
+    case vCenter
 }
 
 extension QuickLayoutMethod: Hashable {}
@@ -132,6 +138,9 @@ extension QuickLayoutMethod {
             self = .sizeToFitWidth
         case LayoutMethodSizeToFitHeight:
             self = .sizeToFitHeight
+
+        case LayoutMethodVertCenter:
+            self = .vCenter
 
         default:
             return nil
@@ -210,7 +219,9 @@ struct QuickViewBaseSpecImp: QuickViewBaseSpec {
 protocol QuickLabelSpec: QuickViewSpec {
     var text: String? { get }
     var textColor: UIColor? { get }
+
     var font: UIFont? { get }
+    var textAlignment: NSTextAlignment { get }
 }
 
 struct QuickLabelSpecImp: QuickLabelSpec {
@@ -218,7 +229,9 @@ struct QuickLabelSpecImp: QuickLabelSpec {
 
     let text: String?
     let textColor: UIColor?
+
     let font: UIFont?
+    let textAlignment: NSTextAlignment
 }
 
 public protocol QuickSpec {
@@ -317,7 +330,22 @@ final class Pinner {
             newPin = pin.sizeToFit(.width)
         case .sizeToFitHeight:
             newPin = pin.sizeToFit(.height)
+
+        case .vCenter:
+            newPin = pinVertCenter(spec: spec, pin: pin, view: view)
         }
+
+        return newPin
+    }
+
+    private static func pinVertCenter(spec: QuickLayoutSpec, pin: Pin, view: UIView) -> Pin {
+        guard
+            case let QuickLayoutMethodArgument.vCenter(id, margin) = spec.argument,
+            let related = view.get(by: id)
+        else { return pin }
+
+        let newPin = pin.vCenter(to: related.edge.vCenter)
+            .marginVertical(margin)
 
         return newPin
     }
@@ -484,7 +512,11 @@ open class QuickLabel: UILabel, IQuickView {
 
         text = labelSpec.text
         textColor = labelSpec.textColor
-        font = labelSpec.font
+        textAlignment = labelSpec.textAlignment
+
+        if let value = labelSpec.font {
+            font = value
+        }
     }
 
     private func setupSubviews() {
@@ -822,6 +854,24 @@ extension QuickSpecImp {
             fontSize = CGFloat(fontSizeValue)
         }
 
+        var alignment: NSTextAlignment = .left
+        if let alignmentValue = json["textAlignment"] as? Int {
+            let leftAlign: Int = 0
+            let centerAlign: Int = 1
+            let rightAlign: Int = 2
+
+            switch alignmentValue {
+            case leftAlign:
+                alignment = .left
+            case centerAlign:
+                alignment = .center
+            case rightAlign:
+                alignment = .right
+            default:
+                break
+            }
+        }
+
         return QuickLabelSpecImp(
             baseSpec: base,
             text: text,
@@ -830,7 +880,8 @@ extension QuickSpecImp {
                 fontName,
                 size: fontSize,
                 weight: fontWeight
-            )
+            ),
+            textAlignment: alignment
         )
     }
 
@@ -868,12 +919,29 @@ extension QuickSpecImp {
         guard let argValue = values[0] as? String else {
             return nothing
         }
-        if method == .after || method == .before {
-            guard let margin = values[1] as? String, let marginValue = Double(margin),
-                let align = values[2] as? Int, let verticalAlign = VerticalAlign(rawValue: align)
+        let marginSet: Set<QuickLayoutMethod> = [
+            .vCenter, .after, .before,
+        ]
+        if marginSet.contains(method) {
+            guard
+                let margin = values[1] as? String,
+                let marginValue = Double(margin)
             else { return nothing }
 
-            return QuickLayoutMethodArgument.verticalAlign(argValue, CGFloat(marginValue), verticalAlign)
+            let floatMargin: CGFloat = CGFloat(marginValue)
+
+            if method == .vCenter {
+                return QuickLayoutMethodArgument.vCenter(argValue, floatMargin)
+            }
+
+            if method == .after || method == .before {
+                guard
+                    let align = values[2] as? Int,
+                    let verticalAlign = VerticalAlign(rawValue: align)
+                else { return nothing }
+
+                return QuickLayoutMethodArgument.verticalAlign(argValue, floatMargin, verticalAlign)
+            }
         }
 
         if let floatValue = Double(argValue) {
@@ -896,9 +964,22 @@ extension UIFont {
         guard let name = name, let size = size, let weight = weight else {
             return nil
         }
-        let fontWeight = UIFont.Weight(CGFloat(weight))
+        let fontWeight = getFontWeight(rawValue: weight)
 
         return named(name, size: size, weight: fontWeight)
+    }
+
+    // MARK: - Helpers
+
+    private static func getFontWeight(rawValue: Int) -> UIFont.Weight {
+        let regular: Int = 0
+
+        switch rawValue {
+        case regular:
+            return .regular
+        default:
+            return .regular
+        }
     }
 
     private static func named(_ name: String, size: CGFloat, weight: UIFont.Weight) -> UIFont? {
@@ -911,4 +992,4 @@ extension UIFont {
     }
 }
 
-let viewJSON: String = "{\"name\":\"CardController\",\"type\":0,\"container\":{\"name\":\"container\",\"type\":0,\"subviews\":[{\"name\":\"notification\",\"corner\":\"8\",\"backgroundColor\":\"#343F4B\",\"type\":0,\"subviews\":[{\"name\":\"badge\",\"corner\":\"5\",\"backgroundColor\":\"#C0CCDA\",\"type\":0,\"layout\":[{\"method\":3,\"arguments\":[\"8\"]},{\"method\":7,\"arguments\":[\"8\"]},{\"method\":0,\"arguments\":[\"20\"]}]},{\"name\":\"messageLabel\",\"type\":1,\"layout\":[{\"method\":10,\"arguments\":[\"badge\",\"8\",1]},{\"method\":6,\"arguments\":[\"16\"]},{\"method\":13}],\"text\":\"MESSAGES\",\"textColor\":\"#8392A7\",\"font\":{\"name\":\"system\",\"size\":\"14\",\"weight\":0}}],\"layout\":[{\"method\":3,\"arguments\":[\"container.safeArea\"]},{\"method\":9,\"arguments\":[\"16\"]},{\"method\":2,\"arguments\":[\"128\"]},{\"method\":8,\"arguments\":[\"8\"]}]}]}}"
+let viewJSON: String = "{\"name\":\"CardController\",\"type\":0,\"container\":{\"name\":\"container\",\"type\":0,\"subviews\":[{\"name\":\"notification\",\"corner\":\"8\",\"backgroundColor\":\"#343F4B\",\"type\":0,\"subviews\":[{\"name\":\"badge\",\"corner\":\"5\",\"backgroundColor\":\"#C0CCDA\",\"type\":0,\"layout\":[{\"method\":3,\"arguments\":[\"8\"]},{\"method\":7,\"arguments\":[\"8\"]},{\"method\":0,\"arguments\":[\"20\"]}]},{\"name\":\"messageLabel\",\"type\":1,\"layout\":[{\"method\":10,\"arguments\":[\"badge\",\"8\",1]},{\"method\":11,\"arguments\":[\"timeLabel\",\"16\",3]},{\"method\":13}],\"lines\":0,\"text\":\"MESSAGES\",\"textColor\":\"#8392A7\",\"textAlignment\":0,\"font\":{\"name\":\"system\",\"size\":\"14\",\"weight\":0}},{\"name\":\"timeLabel\",\"type\":1,\"layout\":[{\"method\":15,\"arguments\":[\"badge\",\"0\"]},{\"method\":6,\"arguments\":[\"16\"]},{\"method\":12}],\"lines\":0,\"text\":\"now\",\"textColor\":\"#8392A7\",\"textAlignment\":2,\"font\":{\"name\":\"system\",\"size\":\"14\",\"weight\":0}}],\"layout\":[{\"method\":3,\"arguments\":[\"container.safeArea\"]},{\"method\":9,\"arguments\":[\"16\"]},{\"method\":2,\"arguments\":[\"128\"]},{\"method\":8,\"arguments\":[\"8\"]}]}]}}"
