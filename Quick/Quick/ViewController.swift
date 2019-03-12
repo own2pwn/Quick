@@ -177,6 +177,8 @@ public protocol QuickSpec {
     var subviews: [QuickSpec] { get }
     var viewSpec: QuickViewSpec { get }
     var layoutSpecs: [QuickLayoutSpec] { get }
+
+    // var allSubviews: [QuickSpec] { get }
 }
 
 public protocol QuickControllerSpec {
@@ -208,7 +210,7 @@ final class Pinner {
 
     // MARK: - Interface
 
-    static func layout(_ view: UIView, specs: [QuickLayoutSpec], in container: UIView) {
+    static func layout(_ view: UIView, specs: [QuickLayoutSpec], in container: UIView?) {
         let viewPin = view.pin
 
         for spec in specs {
@@ -219,14 +221,15 @@ final class Pinner {
 
     // MARK: - Helpers
 
-    private static func apply(spec: QuickLayoutSpec, to pin: Pin, in container: UIView) {
+    private static func apply(spec: QuickLayoutSpec, to pin: Pin, in container: UIView?) {
+        let viewContainer: UIView = container ?? UIView()
         let const: CGFloat = spec.argument.argValue ?? 0
         var insets: PEdgeInsets = PEdgeInsets(
             top: const, left: const,
             bottom: const, right: const
         )
         if case .containerSafeArea = spec.argument {
-            insets = container.pin.safeArea
+            insets = viewContainer.pin.safeArea
         }
 
         switch spec.method {
@@ -292,7 +295,14 @@ open class QuickView: UIView {
 
     public let spec: QuickSpec
 
+    private weak var container: UIView?
+
     // MARK: - Init
+
+    public convenience init(spec: QuickSpec, container: UIView?) {
+        self.init(spec: spec)
+        self.container = container
+    }
 
     public init(spec: QuickSpec) {
         identifier = spec.name
@@ -300,6 +310,7 @@ open class QuickView: UIView {
         super.init(frame: .zero)
 
         setupView(spec: spec.viewSpec)
+        spec.subviews.forEach(setupSubview)
     }
 
     private func setupView(spec: QuickViewSpec) {
@@ -309,20 +320,26 @@ open class QuickView: UIView {
         }
     }
 
+    private func setupSubview(spec: QuickSpec) {
+        let producer = Producer()
+        let newViews = spec.subviews.map(producer.makeView)
+        newViews.forEach(addSubview)
+    }
+
     @available(*, unavailable)
     public required init?(coder _: NSCoder) { fatalError() }
 
     // MARK: - Layout
 
-    func quickLayout(container: UIView) {
+//    func quickLayout(container: UIView) {
+//        Pinner.layout(self, specs: spec.layoutSpecs, in: container)
+//    }
+
+    open override func layoutSubviews() {
+        super.layoutSubviews()
+
         Pinner.layout(self, specs: spec.layoutSpecs, in: container)
     }
-
-//    open override func layoutSubviews() {
-//        super.layoutSubviews()
-//
-//        Pinner.layout(self, specs: spec.layoutSpecs, in: self)
-//    }
 }
 
 final class Bootstrapper {
@@ -370,7 +387,7 @@ open class QuickController: UIViewController {
     private func makeViews(specs: [QuickSpec]) -> [QuickView] {
         let producer = Producer()
 
-        return specs.map(producer.makeView)
+        return specs.map { producer.makeView(spec: $0, container: view) }
     }
 
     // MARK: - Layout
@@ -379,14 +396,14 @@ open class QuickController: UIViewController {
         let quickViews: [QuickView] = view.subviews
             .compactMap { $0 as? QuickView }
 
-        quickViews.forEach { $0.quickLayout(container: view) }
+        quickViews.forEach { $0.layoutIfNeeded() }
     }
 }
 
 final class Producer {
     // MARK: - Members
 
-    private typealias Builder = (QuickSpec) -> QuickView
+    private typealias Builder = (QuickSpec, UIView?) -> QuickView
 
     private lazy var bootstrap:
         Bootstrapper = Bootstrapper()
@@ -394,18 +411,22 @@ final class Producer {
     // MARK: - Interface
 
     func makeView(spec: QuickSpec) -> QuickView {
+        return makeView(spec: spec, container: nil)
+    }
+
+    func makeView(spec: QuickSpec, container: UIView?) -> QuickView {
         guard let maker = quickTypeToBuilder[spec.quickType] else {
             assertionFailure()
-            return QuickView(spec: spec)
+            return QuickView(spec: spec, container: container)
         }
 
-        return maker(spec)
+        return maker(spec, container)
     }
 
     // MARK: - Helpers
 
-    private func makePlainView(spec: QuickSpec) -> QuickView {
-        let plain = QuickView(spec: spec)
+    private func makePlainView(spec: QuickSpec, container: UIView?) -> QuickView {
+        let plain = QuickView(spec: spec, container: container)
 
         return plain
     }
@@ -427,7 +448,7 @@ class ViewController: QuickController {
     }
 
     private func testJSON() {
-        let str: String = "{\"name\":\"CardController\",\"type\":0,\"container\":{\"name\":\"container\",\"type\":0,\"subviews\":[{\"name\":\"card\",\"corner\":\"8\",\"backgroundColor\":\"#343F4B\",\"type\":0,\"layout\":[{\"method\":3,\"arguments\":[\"container.safeArea\"]},{\"method\":9,\"arguments\":[\"16\"]},{\"method\":2,\"arguments\":[\"128\"]},{\"method\":8,\"arguments\":[\"8\"]}]}]}}"
+        let str: String = "{\"name\":\"CardController\",\"type\":0,\"container\":{\"name\":\"container\",\"type\":0,\"subviews\":[{\"name\":\"notification\",\"corner\":\"8\",\"backgroundColor\":\"#343F4B\",\"type\":0,\"subviews\":[{\"name\":\"badge\",\"corner\":\"5\",\"backgroundColor\":\"#C0CCDA\",\"type\":0,\"layout\":[{\"method\":3,\"arguments\":[\"8\"]},{\"method\":7,\"arguments\":[\"8\"]},{\"method\":0,\"arguments\":[\"20\"]}]}],\"layout\":[{\"method\":3,\"arguments\":[\"container.safeArea\"]},{\"method\":9,\"arguments\":[\"16\"]},{\"method\":2,\"arguments\":[\"128\"]},{\"method\":8,\"arguments\":[\"8\"]}]}]}}"
         if let d = str.data(using: .utf8), let qc = QuickControllerSpecImp(data: d) {
             setup(with: qc)
         }
