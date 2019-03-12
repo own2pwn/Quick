@@ -310,7 +310,7 @@ open class QuickView: UIView {
         super.init(frame: .zero)
 
         setupView(spec: spec.viewSpec)
-        spec.subviews.forEach(setupSubview)
+        setupSubviews()
     }
 
     private func setupView(spec: QuickViewSpec) {
@@ -320,10 +320,10 @@ open class QuickView: UIView {
         }
     }
 
-    private func setupSubview(spec: QuickSpec) {
+    private func setupSubviews() {
         let producer = Producer()
-        let newViews = spec.subviews.map(producer.makeView)
-        newViews.forEach(addSubview)
+        let views = spec.subviews.map(producer.makeView)
+        views.forEach(addSubview)
     }
 
     @available(*, unavailable)
@@ -339,6 +339,7 @@ open class QuickView: UIView {
         super.layoutSubviews()
 
         Pinner.layout(self, specs: spec.layoutSpecs, in: container)
+        subviews.forEach { $0.setNeedsLayout() }
     }
 }
 
@@ -387,7 +388,7 @@ open class QuickController: UIViewController {
     private func makeViews(specs: [QuickSpec]) -> [QuickView] {
         let producer = Producer()
 
-        return specs.map { producer.makeView(spec: $0, container: view) }
+        return specs.map { producer.makeView(spec: $0, in: view) }
     }
 
     // MARK: - Layout
@@ -411,10 +412,10 @@ final class Producer {
     // MARK: - Interface
 
     func makeView(spec: QuickSpec) -> QuickView {
-        return makeView(spec: spec, container: nil)
+        return makeView(spec: spec, in: nil)
     }
 
-    func makeView(spec: QuickSpec, container: UIView?) -> QuickView {
+    func makeView(spec: QuickSpec, in container: UIView?) -> QuickView {
         guard let maker = quickTypeToBuilder[spec.quickType] else {
             assertionFailure()
             return QuickView(spec: spec, container: container)
