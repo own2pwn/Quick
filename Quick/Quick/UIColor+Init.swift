@@ -79,6 +79,18 @@ public extension UIColor {
     }
 
     /**
+     The rgba string representation of color with alpha of the form #RRGGBBAA/#RRGGBB, fails to clear color.
+
+     - parameter rgba: String value.
+     */
+    static func hexOrClear(_ rgba: String?) -> UIColor {
+        guard let value = rgba, let color = hex(value) else {
+            return UIColor.clear
+        }
+        return color
+    }
+
+    /**
      The rgba string representation of color with alpha of the form #RRGGBBAA/#RRGGBB, fails to nil.
 
      - parameter rgba: String value.

@@ -38,7 +38,7 @@ public enum QuickLayoutMethodArgument {
     case constant(CGFloat)
     case containerSafeArea
 
-    case verticalAlign(UIView, CGFloat, VerticalAlign)
+    case verticalAlign(String, CGFloat, VerticalAlign)
 }
 
 public extension QuickLayoutMethodArgument {
@@ -47,7 +47,7 @@ public extension QuickLayoutMethodArgument {
         case let .constant(value):
             return value
 
-        case .containerSafeArea:
+        default:
             return nil
         }
     }
@@ -196,13 +196,13 @@ struct QuickViewSpecImp: QuickViewSpec {
 }
 
 public protocol QuickViewBaseSpec {
-    var backgroundColor: UIColor? { get }
+    var backgroundColor: UIColor { get }
 
     var cornerRadius: CGFloat? { get }
 }
 
 struct QuickViewBaseSpecImp: QuickViewBaseSpec {
-    let backgroundColor: UIColor?
+    let backgroundColor: UIColor
 
     let cornerRadius: CGFloat?
 }
@@ -262,17 +262,15 @@ final class Pinner {
     // MARK: - Interface
 
     static func layout(_ view: UIView, specs: [QuickLayoutSpec], in container: UIView?) {
-        let viewPin = view.pin
-
+        var currentPin: Pin = view.pin
         for spec in specs {
-            apply(spec: spec, to: viewPin, in: container)
-            // let pinAction = action(pin: viewPin, for: spec)
+            currentPin = apply(spec: spec, to: view, with: currentPin, in: container)
         }
     }
 
     // MARK: - Helpers
 
-    private static func apply(spec: QuickLayoutSpec, to pin: Pin, in container: UIView?) {
+    private static func apply(spec: QuickLayoutSpec, to view: UIView, with pin: Pin, in container: UIView?) -> Pin {
         let viewContainer: UIView = container ?? UIView()
         let const: CGFloat = spec.argument.argValue ?? 0
         var insets: PEdgeInsets = PEdgeInsets(
@@ -283,71 +281,98 @@ final class Pinner {
             insets = viewContainer.pin.safeArea
         }
 
+        var newPin: Pin = pin
         switch spec.method {
         case .size:
-            pin.size(const)
+            newPin = pin.size(const)
         case .width:
-            pin.width(const)
+            newPin = pin.width(const)
         case .height:
-            pin.height(const)
+            newPin = pin.height(const)
 
         case .top:
-            pin.top(insets)
+            newPin = pin.top(insets)
         case .bottom:
-            pin.bottom(insets)
+            newPin = pin.bottom(insets)
         case .vertically:
-            pin.vertically(insets)
+            newPin = pin.vertically(insets)
 
         case .end:
-            pin.end(insets)
+            newPin = pin.end(insets)
         case .start:
-            pin.start(insets)
+            newPin = pin.start(insets)
         case .horizontally:
-            pin.horizontally(insets)
+            newPin = pin.horizontally(insets)
 
         case .marginTop:
-            pin.marginTop(const)
+            newPin = pin.marginTop(const)
 
         case .after:
-            pin.after(of: <#T##UIView#>, aligned: <#T##VerticalAlign#>)
+            newPin = pinAfter(spec: spec, pin: pin, view: view)
         case .before:
-            <#code#>
+            newPin = pinBefore(spec: spec, pin: pin, view: view)
         case .sizeToFit:
-            <#code#>
+            newPin = pin.sizeToFit()
         case .sizeToFitWidth:
-            <#code#>
+            newPin = pin.sizeToFit(.width)
         case .sizeToFitHeight:
-            <#code#>
+            newPin = pin.sizeToFit(.height)
         }
+
+        return newPin
     }
 
-    private static func action(pin: PinLayout<UIView>, for spec: QuickLayoutSpec) -> Action {
-        switch spec.method {
-        case .top:
-            return pin.top
-        case .bottom:
-            return pin.bottom
-        case .vertically:
-            return pin.vertically
+    private static func pinAfter(spec: QuickLayoutSpec, pin: Pin, view: UIView) -> Pin {
+        guard
+            case let QuickLayoutMethodArgument.verticalAlign(id, margin, align) = spec.argument,
+            let related = view.get(by: id)
+        else { return pin }
 
-        case .size:
-            return pin.size
-        case .width:
-            return pin.width
-        case .height:
-            return pin.height
+        let newPin = pin.after(of: related, aligned: align)
+            .marginStart(margin)
 
-        case .end:
-            return pin.end
-        case .start:
-            return pin.start
-        case .horizontally:
-            return pin.horizontally
-
-        case .marginTop:
-            return pin.marginTop
-        }
+        return newPin
     }
+
+    private static func pinBefore(spec: QuickLayoutSpec, pin: Pin, view: UIView) -> Pin {
+        guard
+            case let QuickLayoutMethodArgument.verticalAlign(id, margin, align) = spec.argument,
+            let related = view.get(by: id)
+        else { return pin }
+
+        let newPin = pin.before(of: related, aligned: align)
+            .marginEnd(margin)
+
+        return newPin
+    }
+
+//    private static func action(pin: PinLayout<UIView>, for spec: QuickLayoutSpec) -> Action {
+//        switch spec.method {
+//        case .top:
+//            return pin.top
+//        case .bottom:
+//            return pin.bottom
+//        case .vertically:
+//            return pin.vertically
+//
+//        case .size:
+//            return pin.size
+//        case .width:
+//            return pin.width
+//        case .height:
+//            return pin.height
+//
+//        case .end:
+//            return pin.end
+//        case .start:
+//            return pin.start
+//        case .horizontally:
+//            return pin.horizontally
+//
+//        case .marginTop:
+//            return pin.marginTop
+//        }
+//    }
 }
 
 extension UIView {
@@ -366,6 +391,67 @@ protocol IQuickView: class {
 }
 
 typealias TQuickView = (IQuickView & UIView)
+
+// TODO: container to closure that gets container by request
+
+extension UIView {
+    func get(by identifier: String) -> UIView? {
+        var topMostView: UIView = self
+        while let parent = topMostView.superview {
+            topMostView = parent
+        }
+
+        return topMostView.getChild(by: identifier)
+    }
+
+    // MARK: - Helpers
+
+    private func getParent(by identifier: String) -> UIView? {
+        if let quickParent = superview as? IQuickView, quickParent.identifier == identifier {
+            return superview
+        }
+        return superview?.getParent(by: identifier)
+    }
+
+    private func getChild(by identifier: String) -> UIView? {
+        for child in subviews {
+            if let quickChild = child as? IQuickView, quickChild.identifier == identifier {
+                return child
+            }
+        }
+        return subviews.compactMap { $0.getChild(by: identifier) }.first
+    }
+
+    // ===
+
+    func getQuick(by identifier: String) -> IQuickView? {
+        if let parent = getQuickParent(by: identifier) {
+            return parent
+        }
+        if let child = getQuickChild(by: identifier) {
+            return child
+        }
+        return nil
+    }
+
+    // MARK: - Helpers
+
+    private func getQuickParent(by identifier: String) -> IQuickView? {
+        if let quickParent = superview as? IQuickView, quickParent.identifier == identifier {
+            return quickParent
+        }
+        return superview?.getQuickParent(by: identifier)
+    }
+
+    private func getQuickChild(by identifier: String) -> IQuickView? {
+        for child in subviews {
+            if let quickChild = child as? IQuickView, quickChild.identifier == identifier {
+                return quickChild
+            }
+        }
+        return subviews.compactMap { $0.getQuickChild(by: identifier) }.first
+    }
+}
 
 open class QuickLabel: UILabel, IQuickView {
     // MARK: - Members
@@ -711,7 +797,7 @@ extension QuickSpecImp {
         }
 
         return QuickViewBaseSpecImp(
-            backgroundColor: UIColor.hex(colorValue),
+            backgroundColor: UIColor.hexOrClear(colorValue),
             cornerRadius: cornerRadius
         )
     }
@@ -761,7 +847,10 @@ extension QuickSpecImp {
                 let method = QuickLayoutMethod(rawValue: methodValue) {
                 let newSpec = QuickLayoutSpecImp(
                     method: method,
-                    argument: getArgumentValue(spec: spec)
+                    argument: getArgumentValue(
+                        method: method,
+                        spec: spec
+                    )
                 )
                 result.append(newSpec)
             }
@@ -770,7 +859,7 @@ extension QuickSpecImp {
         return result
     }
 
-    private static func getArgumentValue(spec: JSON) -> QuickLayoutMethodArgument {
+    private static func getArgumentValue(method: QuickLayoutMethod, spec: JSON) -> QuickLayoutMethodArgument {
         let nothing: QuickLayoutMethodArgument = .constant(0)
 
         guard let values = spec["arguments"] as? [Any], !values.isEmpty else {
@@ -779,6 +868,14 @@ extension QuickSpecImp {
         guard let argValue = values[0] as? String else {
             return nothing
         }
+        if method == .after || method == .before {
+            guard let margin = values[1] as? String, let marginValue = Double(margin),
+                let align = values[2] as? Int, let verticalAlign = VerticalAlign(rawValue: align)
+            else { return nothing }
+
+            return QuickLayoutMethodArgument.verticalAlign(argValue, CGFloat(marginValue), verticalAlign)
+        }
+
         if let floatValue = Double(argValue) {
             return .constant(CGFloat(floatValue))
         }
@@ -814,4 +911,4 @@ extension UIFont {
     }
 }
 
-let viewJSON: String = "{\"name\":\"CardController\",\"type\":0,\"container\":{\"name\":\"container\",\"type\":0,\"subviews\":[{\"name\":\"notification\",\"corner\":\"8\",\"backgroundColor\":\"#343F4B\",\"type\":0,\"subviews\":[{\"name\":\"badge\",\"corner\":\"5\",\"backgroundColor\":\"#C0CCDA\",\"type\":0,\"layout\":[{\"method\":3,\"arguments\":[\"8\"]},{\"method\":7,\"arguments\":[\"8\"]},{\"method\":0,\"arguments\":[\"20\"]}]},{\"name\":\"messageLabel\",\"type\":1,\"layout\":[{\"method\":10,\"arguments\":[\"badge\",\"8\",0]},{\"method\":6,\"arguments\":[\"16\"]},{\"method\":13}],\"text\":\"MESSAGES\",\"textColor\":\"#8392A7\",\"font\":{\"name\":\"system\",\"size\":\"14\",\"weight\":0}}],\"layout\":[{\"method\":3,\"arguments\":[\"container.safeArea\"]},{\"method\":9,\"arguments\":[\"16\"]},{\"method\":2,\"arguments\":[\"128\"]},{\"method\":8,\"arguments\":[\"8\"]}]}]}}"
+let viewJSON: String = "{\"name\":\"CardController\",\"type\":0,\"container\":{\"name\":\"container\",\"type\":0,\"subviews\":[{\"name\":\"notification\",\"corner\":\"8\",\"backgroundColor\":\"#343F4B\",\"type\":0,\"subviews\":[{\"name\":\"badge\",\"corner\":\"5\",\"backgroundColor\":\"#C0CCDA\",\"type\":0,\"layout\":[{\"method\":3,\"arguments\":[\"8\"]},{\"method\":7,\"arguments\":[\"8\"]},{\"method\":0,\"arguments\":[\"20\"]}]},{\"name\":\"messageLabel\",\"type\":1,\"layout\":[{\"method\":10,\"arguments\":[\"badge\",\"8\",1]},{\"method\":6,\"arguments\":[\"16\"]},{\"method\":13}],\"text\":\"MESSAGES\",\"textColor\":\"#8392A7\",\"font\":{\"name\":\"system\",\"size\":\"14\",\"weight\":0}}],\"layout\":[{\"method\":3,\"arguments\":[\"container.safeArea\"]},{\"method\":9,\"arguments\":[\"16\"]},{\"method\":2,\"arguments\":[\"128\"]},{\"method\":8,\"arguments\":[\"8\"]}]}]}}"
