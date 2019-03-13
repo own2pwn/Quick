@@ -27,14 +27,17 @@ let LayoutMethodHorizontally: Int = 8
 
 let LayoutMethodMarginTop: Int = 9
 
-let LayoutMethodAfter: Int = 10
-let LayoutMethodBefore: Int = 11
+let LayoutMethodAbove: Int = 10
+let LayoutMethodBelow: Int = 11
 
-let LayoutMethodSizeToFit: Int = 12
-let LayoutMethodSizeToFitWidth: Int = 13
-let LayoutMethodSizeToFitHeight: Int = 14
+let LayoutMethodAfter: Int = 12
+let LayoutMethodBefore: Int = 13
 
-let LayoutMethodVertCenter: Int = 15
+let LayoutMethodSizeToFit: Int = 14
+let LayoutMethodSizeToFitWidth: Int = 15
+let LayoutMethodSizeToFitHeight: Int = 16
+
+let LayoutMethodVertCenter: Int = 17
 
 public enum QuickLayoutMethodArgument {
     case constant(CGFloat)
@@ -43,6 +46,7 @@ public enum QuickLayoutMethodArgument {
     case vCenter(String, CGFloat)
 
     case verticalAlign(String, CGFloat, VerticalAlign)
+    case horizontalAlign(String, CGFloat, HorizontalAlign)
 }
 
 public extension QuickLayoutMethodArgument {
@@ -88,6 +92,9 @@ public enum QuickLayoutMethod {
 
     case marginTop
 
+    case above
+    case below
+
     case after
     case before
 
@@ -127,6 +134,12 @@ extension QuickLayoutMethod {
         case LayoutMethodMarginTop:
             self = .marginTop
 
+        case LayoutMethodAbove:
+            self = .above
+
+        case LayoutMethodBelow:
+            self = .below
+
         case LayoutMethodAfter:
             self = .after
         case LayoutMethodBefore:
@@ -147,39 +160,6 @@ extension QuickLayoutMethod {
         }
     }
 }
-
-// extension QuickLayoutMethod {
-//    init?(rawValue: Int, arg: CGFloat) {
-//        switch rawValue {
-//        case LayoutMethodSize:
-//            self = .size(arg)
-//        case LayoutMethodWidth:
-//            self = .width(arg)
-//        case LayoutMethodHeight:
-//            self = .height(arg)
-//
-//        case LayoutMethodTop:
-//            self = .top(arg)
-//        case LayoutMethodBottom:
-//            self = .bottom(arg)
-//        case LayoutMethodVertically:
-//            self = .vertically(arg)
-//
-//        case LayoutMethodEnd:
-//            self = .end(arg)
-//        case LayoutMethodStart:
-//            self = .start(arg)
-//        case LayoutMethodHorizontally:
-//            self = .horizontally(arg)
-//
-//        case LayoutMethodMarginTop:
-//            self = .marginTop(arg)
-//
-//        default:
-//            return nil
-//        }
-//    }
-// }
 
 public protocol QuickLayoutSpec {
     var method: QuickLayoutMethod { get }
@@ -241,8 +221,6 @@ public protocol QuickSpec {
     var subviews: [QuickSpec] { get }
     var viewSpec: QuickViewSpec { get }
     var layoutSpecs: [QuickLayoutSpec] { get }
-
-    // var allSubviews: [QuickSpec] { get }
 }
 
 public protocol QuickControllerSpec {
@@ -320,6 +298,11 @@ final class Pinner {
         case .marginTop:
             newPin = pin.marginTop(const)
 
+        case .above:
+            newPin = pinAbove(spec: spec, pin: pin, view: view)
+        case .below:
+            newPin = pinBelow(spec: spec, pin: pin, view: view)
+
         case .after:
             newPin = pinAfter(spec: spec, pin: pin, view: view)
         case .before:
@@ -334,6 +317,30 @@ final class Pinner {
         case .vCenter:
             newPin = pinVertCenter(spec: spec, pin: pin, view: view)
         }
+
+        return newPin
+    }
+
+    private static func pinAbove(spec: QuickLayoutSpec, pin: Pin, view: UIView) -> Pin {
+        guard
+            case let QuickLayoutMethodArgument.horizontalAlign(id, margin, align) = spec.argument,
+            let related = view.get(by: id)
+        else { return pin }
+
+        let newPin = pin.above(of: related, aligned: align)
+            .marginBottom(margin)
+
+        return newPin
+    }
+
+    private static func pinBelow(spec: QuickLayoutSpec, pin: Pin, view: UIView) -> Pin {
+        guard
+            case let QuickLayoutMethodArgument.horizontalAlign(id, margin, align) = spec.argument,
+            let related = view.get(by: id)
+        else { return pin }
+
+        let newPin = pin.below(of: related, aligned: align)
+            .marginTop(margin)
 
         return newPin
     }
@@ -373,34 +380,6 @@ final class Pinner {
 
         return newPin
     }
-
-//    private static func action(pin: PinLayout<UIView>, for spec: QuickLayoutSpec) -> Action {
-//        switch spec.method {
-//        case .top:
-//            return pin.top
-//        case .bottom:
-//            return pin.bottom
-//        case .vertically:
-//            return pin.vertically
-//
-//        case .size:
-//            return pin.size
-//        case .width:
-//            return pin.width
-//        case .height:
-//            return pin.height
-//
-//        case .end:
-//            return pin.end
-//        case .start:
-//            return pin.start
-//        case .horizontally:
-//            return pin.horizontally
-//
-//        case .marginTop:
-//            return pin.marginTop
-//        }
-//    }
 }
 
 extension UIView {
@@ -920,7 +899,9 @@ extension QuickSpecImp {
             return nothing
         }
         let marginSet: Set<QuickLayoutMethod> = [
-            .vCenter, .after, .before,
+            .after, .before,
+            .above, .below,
+            .vCenter,
         ]
         if marginSet.contains(method) {
             guard
@@ -934,13 +915,26 @@ extension QuickSpecImp {
                 return QuickLayoutMethodArgument.vCenter(argValue, floatMargin)
             }
 
-            if method == .after || method == .before {
+            let threeArgMethods: Set<QuickLayoutMethod> = [
+                .after, .before,
+                .above, .below,
+            ]
+
+            if threeArgMethods.contains(method) {
                 guard
-                    let align = values[2] as? Int,
-                    let verticalAlign = VerticalAlign(rawValue: align)
+                    let align = values[2] as? Int
                 else { return nothing }
 
-                return QuickLayoutMethodArgument.verticalAlign(argValue, floatMargin, verticalAlign)
+                if method == .after || method == .before {
+                    let verticalAlign: VerticalAlign = VerticalAlign(rawValue: align) ?? .none
+
+                    return QuickLayoutMethodArgument.verticalAlign(argValue, floatMargin, verticalAlign)
+                }
+                if method == .above || method == .below {
+                    let horizontalAlign: HorizontalAlign = HorizontalAlign(rawValue: align) ?? .none
+
+                    return QuickLayoutMethodArgument.horizontalAlign(argValue, floatMargin, horizontalAlign)
+                }
             }
         }
 
@@ -972,19 +966,37 @@ extension UIFont {
     // MARK: - Helpers
 
     private static func getFontWeight(rawValue: Int) -> UIFont.Weight {
-        let regular: Int = 0
+        let ultraLight: Int = 0
+        let thin: Int = 1
+        let light: Int = 2
+        let regular: Int = 3
+        let medium: Int = 4
+        let semibold: Int = 5
+        let bold: Int = 6
+        let heavy: Int = 7
+        let black: Int = 8
 
-        switch rawValue {
-        case regular:
-            return .regular
-        default:
-            return .regular
-        }
+        let rawToWeight: [Int: UIFont.Weight] = [
+            ultraLight: .ultraLight,
+            thin: .thin,
+            light: .light,
+            regular: .regular,
+            medium: .medium,
+            semibold: .semibold,
+            bold: .bold,
+            heavy: .heavy,
+            black: .black,
+        ]
+        let result: UIFont.Weight = rawToWeight[rawValue] ?? .regular
+
+        return result
     }
 
     private static func named(_ name: String, size: CGFloat, weight: UIFont.Weight) -> UIFont? {
+        let systemFont: String = "system"
+
         switch name {
-        case "system":
+        case systemFont:
             return UIFont.systemFont(ofSize: size, weight: weight)
         default:
             return nil
@@ -992,4 +1004,4 @@ extension UIFont {
     }
 }
 
-let viewJSON: String = "{\"name\":\"CardController\",\"type\":0,\"container\":{\"name\":\"container\",\"type\":0,\"subviews\":[{\"name\":\"notification\",\"corner\":\"8\",\"backgroundColor\":\"#343F4B\",\"type\":0,\"subviews\":[{\"name\":\"badge\",\"corner\":\"5\",\"backgroundColor\":\"#C0CCDA\",\"type\":0,\"layout\":[{\"method\":3,\"arguments\":[\"8\"]},{\"method\":7,\"arguments\":[\"8\"]},{\"method\":0,\"arguments\":[\"20\"]}]},{\"name\":\"messageLabel\",\"type\":1,\"layout\":[{\"method\":10,\"arguments\":[\"badge\",\"8\",1]},{\"method\":11,\"arguments\":[\"timeLabel\",\"16\",3]},{\"method\":13}],\"lines\":0,\"text\":\"MESSAGES\",\"textColor\":\"#8392A7\",\"textAlignment\":0,\"font\":{\"name\":\"system\",\"size\":\"14\",\"weight\":0}},{\"name\":\"timeLabel\",\"type\":1,\"layout\":[{\"method\":15,\"arguments\":[\"badge\",\"0\"]},{\"method\":6,\"arguments\":[\"16\"]},{\"method\":12}],\"lines\":0,\"text\":\"now\",\"textColor\":\"#8392A7\",\"textAlignment\":2,\"font\":{\"name\":\"system\",\"size\":\"14\",\"weight\":0}}],\"layout\":[{\"method\":3,\"arguments\":[\"container.safeArea\"]},{\"method\":9,\"arguments\":[\"16\"]},{\"method\":2,\"arguments\":[\"128\"]},{\"method\":8,\"arguments\":[\"8\"]}]}]}}"
+let viewJSON: String = "{\"name\":\"CardController\",\"type\":0,\"container\":{\"name\":\"container\",\"type\":0,\"subviews\":[{\"name\":\"notification\",\"corner\":\"8\",\"backgroundColor\":\"#343F4B\",\"type\":0,\"subviews\":[{\"name\":\"badge\",\"corner\":\"5\",\"backgroundColor\":\"#C0CCDA\",\"type\":0,\"layout\":[{\"method\":3,\"arguments\":[\"8\"]},{\"method\":7,\"arguments\":[\"8\"]},{\"method\":0,\"arguments\":[\"20\"]}]},{\"name\":\"badgeTextLabel\",\"type\":1,\"layout\":[{\"method\":12,\"arguments\":[\"badge\",\"8\",1]},{\"method\":13,\"arguments\":[\"timeLabel\",\"16\",3]},{\"method\":15}],\"lines\":0,\"text\":\"MESSAGES\",\"textColor\":\"#8392A7\",\"textAlignment\":0,\"font\":{\"name\":\"system\",\"size\":\"14\",\"weight\":3}},{\"name\":\"timeLabel\",\"type\":1,\"layout\":[{\"method\":17,\"arguments\":[\"badge\",\"0\"]},{\"method\":6,\"arguments\":[\"16\"]},{\"method\":14}],\"lines\":0,\"text\":\"now\",\"textColor\":\"#8392A7\",\"textAlignment\":2,\"font\":{\"name\":\"system\",\"size\":\"14\",\"weight\":3}},{\"name\":\"titleLabel\",\"type\":1,\"layout\":[{\"method\":11,\"arguments\":[\"badge\",\"8\",4]},{\"method\":6,\"arguments\":[\"16\"]},{\"method\":15}],\"lines\":0,\"text\":\"Your flowers are ready\",\"textColor\":\"#FCFCFC\",\"textAlignment\":0,\"font\":{\"name\":\"system\",\"size\":\"16\",\"weight\":5}},{\"name\":\"subtitleLabel\",\"type\":1,\"layout\":[{\"method\":11,\"arguments\":[\"titleLabel\",\"8\",4]},{\"method\":6,\"arguments\":[\"16\"]},{\"method\":15}],\"lines\":0,\"text\":\"The order has been accepted\",\"textColor\":\"#E3E3E3\",\"textAlignment\":0,\"font\":{\"name\":\"system\",\"size\":\"16\",\"weight\":4}}],\"layout\":[{\"method\":3,\"arguments\":[\"container.safeArea\"]},{\"method\":9,\"arguments\":[\"16\"]},{\"method\":2,\"arguments\":[\"128\"]},{\"method\":8,\"arguments\":[\"8\"]}]}]}}"
