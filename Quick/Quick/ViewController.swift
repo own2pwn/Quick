@@ -26,24 +26,34 @@ let LayoutMethodStart: Int = 7
 let LayoutMethodHorizontally: Int = 8
 
 let LayoutMethodMarginTop: Int = 9
+let LayoutMethodMarginBottom: Int = 10
 
-let LayoutMethodAbove: Int = 10
-let LayoutMethodBelow: Int = 11
+let LayoutMethodAbove: Int = 11
+let LayoutMethodBelow: Int = 12
 
-let LayoutMethodAfter: Int = 12
-let LayoutMethodBefore: Int = 13
+let LayoutMethodAfter: Int = 13
+let LayoutMethodBefore: Int = 14
 
-let LayoutMethodSizeToFit: Int = 14
-let LayoutMethodSizeToFitWidth: Int = 15
-let LayoutMethodSizeToFitHeight: Int = 16
+let LayoutMethodSizeToFit: Int = 15
+let LayoutMethodSizeToFitWidth: Int = 16
+let LayoutMethodSizeToFitHeight: Int = 17
 
-let LayoutMethodVertCenter: Int = 17
+let LayoutMethodVertCenterTo: Int = 18
+let LayoutMethodHoriCenterTo: Int = 19
+
+let LayoutMethodVertCenter: Int = 20
+let LayoutMethodHoriCenter: Int = 21
+
+let LayoutMethodAll: Int = 22
+let LayoutMethodCenter: Int = 23
+let LayoutMethodUpdate: Int = 24
 
 public enum QuickLayoutMethodArgument {
     case constant(CGFloat)
     case containerSafeArea
 
-    case vCenter(String, CGFloat)
+    case vCenterTo(String, CGFloat)
+    case hCenterTo(String, CGFloat)
 
     case verticalAlign(String, CGFloat, VerticalAlign)
     case horizontalAlign(String, CGFloat, HorizontalAlign)
@@ -103,6 +113,14 @@ public enum QuickLayoutMethod {
     case sizeToFitHeight
 
     case vCenter
+    case vCenterTo
+
+    case hCenter
+    case hCenterTo
+
+    case all
+    case center
+    case update
 }
 
 extension QuickLayoutMethod: Hashable {}
@@ -154,6 +172,20 @@ extension QuickLayoutMethod {
 
         case LayoutMethodVertCenter:
             self = .vCenter
+        case LayoutMethodVertCenterTo:
+            self = .vCenterTo
+
+        case LayoutMethodHoriCenter:
+            self = .hCenter
+        case LayoutMethodHoriCenterTo:
+            self = .hCenterTo
+
+        case LayoutMethodAll:
+            self = .all
+        case LayoutMethodCenter:
+            self = .center
+        case LayoutMethodUpdate:
+            self = .update
 
         default:
             return nil
@@ -315,7 +347,22 @@ final class Pinner {
             newPin = pin.sizeToFit(.height)
 
         case .vCenter:
-            newPin = pinVertCenter(spec: spec, pin: pin, view: view)
+            newPin = pinVertCenter(pin: pin, margin: const)
+        case .vCenterTo:
+            newPin = pinVertCenterTo(spec: spec, pin: pin, view: view)
+
+        case .hCenter:
+            newPin = pinHoriCenter(pin: pin, margin: const)
+        case .hCenterTo:
+            newPin = pinHoriCenterTo(spec: spec, pin: pin, view: view)
+
+        case .all:
+            newPin = pin.all(const)
+        case .center:
+            newPin = pin.center(const)
+        case .update:
+            pin.layout()
+            newPin = view.pin
         }
 
         return newPin
@@ -345,14 +392,38 @@ final class Pinner {
         return newPin
     }
 
-    private static func pinVertCenter(spec: QuickLayoutSpec, pin: Pin, view: UIView) -> Pin {
+    private static func pinVertCenter(pin: Pin, margin: CGFloat) -> Pin {
+        let newPin = pin.vCenter(margin)
+
+        return newPin
+    }
+
+    private static func pinVertCenterTo(spec: QuickLayoutSpec, pin: Pin, view: UIView) -> Pin {
         guard
-            case let QuickLayoutMethodArgument.vCenter(id, margin) = spec.argument,
+            case let QuickLayoutMethodArgument.vCenterTo(id, margin) = spec.argument,
             let related = view.get(by: id)
         else { return pin }
 
         let newPin = pin.vCenter(to: related.edge.vCenter)
             .marginVertical(margin)
+
+        return newPin
+    }
+
+    private static func pinHoriCenter(pin: Pin, margin: CGFloat) -> Pin {
+        let newPin = pin.hCenter(margin)
+
+        return newPin
+    }
+
+    private static func pinHoriCenterTo(spec: QuickLayoutSpec, pin: Pin, view: UIView) -> Pin {
+        guard
+            case let QuickLayoutMethodArgument.hCenterTo(id, margin) = spec.argument,
+            let related = view.get(by: id)
+        else { return pin }
+
+        let newPin = pin.hCenter(to: related.edge.hCenter)
+            .marginHorizontal(margin)
 
         return newPin
     }
@@ -901,7 +972,7 @@ extension QuickSpecImp {
         let marginSet: Set<QuickLayoutMethod> = [
             .after, .before,
             .above, .below,
-            .vCenter,
+            .vCenterTo, .hCenterTo,
         ]
         if marginSet.contains(method) {
             guard
@@ -911,8 +982,12 @@ extension QuickSpecImp {
 
             let floatMargin: CGFloat = CGFloat(marginValue)
 
-            if method == .vCenter {
-                return QuickLayoutMethodArgument.vCenter(argValue, floatMargin)
+            if method == .vCenterTo {
+                return QuickLayoutMethodArgument.vCenterTo(argValue, floatMargin)
+            }
+
+            if method == .hCenterTo {
+                return QuickLayoutMethodArgument.hCenterTo(argValue, floatMargin)
             }
 
             let threeArgMethods: Set<QuickLayoutMethod> = [
@@ -1004,4 +1079,4 @@ extension UIFont {
     }
 }
 
-let viewJSON: String = "{\"name\":\"CardController\",\"type\":0,\"container\":{\"name\":\"container\",\"type\":0,\"subviews\":[{\"name\":\"notification\",\"corner\":\"8\",\"backgroundColor\":\"#343F4B\",\"type\":0,\"subviews\":[{\"name\":\"badge\",\"corner\":\"5\",\"backgroundColor\":\"#C0CCDA\",\"type\":0,\"layout\":[{\"method\":3,\"arguments\":[\"8\"]},{\"method\":7,\"arguments\":[\"8\"]},{\"method\":0,\"arguments\":[\"20\"]}]},{\"name\":\"badgeTextLabel\",\"type\":1,\"layout\":[{\"method\":12,\"arguments\":[\"badge\",\"8\",1]},{\"method\":13,\"arguments\":[\"timeLabel\",\"16\",3]},{\"method\":15}],\"lines\":0,\"text\":\"MESSAGES\",\"textColor\":\"#8392A7\",\"textAlignment\":0,\"font\":{\"name\":\"system\",\"size\":\"14\",\"weight\":3}},{\"name\":\"timeLabel\",\"type\":1,\"layout\":[{\"method\":17,\"arguments\":[\"badge\",\"0\"]},{\"method\":6,\"arguments\":[\"16\"]},{\"method\":14}],\"lines\":0,\"text\":\"now\",\"textColor\":\"#8392A7\",\"textAlignment\":2,\"font\":{\"name\":\"system\",\"size\":\"14\",\"weight\":3}},{\"name\":\"titleLabel\",\"type\":1,\"layout\":[{\"method\":11,\"arguments\":[\"badge\",\"8\",4]},{\"method\":6,\"arguments\":[\"16\"]},{\"method\":15}],\"lines\":0,\"text\":\"Your flowers are ready\",\"textColor\":\"#FCFCFC\",\"textAlignment\":0,\"font\":{\"name\":\"system\",\"size\":\"16\",\"weight\":5}},{\"name\":\"subtitleLabel\",\"type\":1,\"layout\":[{\"method\":11,\"arguments\":[\"titleLabel\",\"8\",4]},{\"method\":6,\"arguments\":[\"16\"]},{\"method\":15}],\"lines\":0,\"text\":\"The order has been accepted\",\"textColor\":\"#E3E3E3\",\"textAlignment\":0,\"font\":{\"name\":\"system\",\"size\":\"16\",\"weight\":4}}],\"layout\":[{\"method\":3,\"arguments\":[\"container.safeArea\"]},{\"method\":9,\"arguments\":[\"16\"]},{\"method\":2,\"arguments\":[\"128\"]},{\"method\":8,\"arguments\":[\"8\"]}]}]}}"
+let viewJSON: String = "{\"name\":\"CardController\",\"type\":0,\"container\":{\"name\":\"container\",\"type\":0,\"subviews\":[{\"name\":\"notification\",\"corner\":\"8\",\"backgroundColor\":\"#343F4B\",\"type\":0,\"subviews\":[{\"name\":\"badge\",\"corner\":\"5\",\"backgroundColor\":\"#C0CCDA\",\"type\":0,\"layout\":[{\"method\":3,\"arguments\":[\"8\"]},{\"method\":7,\"arguments\":[\"8\"]},{\"method\":0,\"arguments\":[\"20\"]}]},{\"name\":\"badgeTextLabel\",\"type\":1,\"layout\":[{\"method\":13,\"arguments\":[\"badge\",\"8\",1]},{\"method\":14,\"arguments\":[\"timeLabel\",\"16\",3]},{\"method\":16}],\"lines\":0,\"text\":\"MESSAGES\",\"textColor\":\"#8392A7\",\"textAlignment\":0,\"font\":{\"name\":\"system\",\"size\":\"14\",\"weight\":3}},{\"name\":\"timeLabel\",\"type\":1,\"layout\":[{\"method\":18,\"arguments\":[\"badge\",\"0\"]},{\"method\":6,\"arguments\":[\"16\"]},{\"method\":15}],\"lines\":0,\"text\":\"now\",\"textColor\":\"#8392A7\",\"textAlignment\":2,\"font\":{\"name\":\"system\",\"size\":\"14\",\"weight\":3}},{\"name\":\"titleLabel\",\"type\":1,\"layout\":[{\"method\":12,\"arguments\":[\"badge\",\"8\",4]},{\"method\":6,\"arguments\":[\"16\"]},{\"method\":16}],\"lines\":0,\"text\":\"Your flowers are ready\",\"textColor\":\"#FCFCFC\",\"textAlignment\":0,\"font\":{\"name\":\"system\",\"size\":\"16\",\"weight\":5}},{\"name\":\"subtitleLabel\",\"type\":1,\"layout\":[{\"method\":12,\"arguments\":[\"titleLabel\",\"8\",4]},{\"method\":6,\"arguments\":[\"16\"]},{\"method\":16}],\"lines\":0,\"text\":\"The order has been accepted\",\"textColor\":\"#E3E3E3\",\"textAlignment\":0,\"font\":{\"name\":\"system\",\"size\":\"16\",\"weight\":4}}],\"layout\":[{\"method\":3,\"arguments\":[\"container.safeArea\"]},{\"method\":9,\"arguments\":[\"16\"]},{\"method\":2,\"arguments\":[\"128\"]},{\"method\":8,\"arguments\":[\"8\"]}]},{\"name\":\"orderContainer\",\"corner\":\"5\",\"backgroundColor\":\"#13C361\",\"type\":0,\"subviews\":[{\"name\":\"orderNowLabel\",\"type\":1,\"layout\":[{\"method\":15},{\"method\":24},{\"method\":23,\"arguments\":[\"0\"]}],\"lines\":0,\"text\":\"Order Now\",\"textColor\":\"#FFFFFF\",\"textAlignment\":0,\"font\":{\"name\":\"system\",\"size\":\"20\",\"weight\":5}}],\"layout\":[{\"method\":4,\"arguments\":[\"container.safeArea\"]},{\"method\":10,\"arguments\":[\"24\"]},{\"method\":2,\"arguments\":[\"60\"]},{\"method\":1,\"arguments\":[\"275\"]},{\"method\":21,\"arguments\":[\"0\"]}]}]}}"
